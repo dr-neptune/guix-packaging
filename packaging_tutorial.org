@@ -1,0 +1,127 @@
+#+TITLE: Packaging Tutorial
+
+https://guix.gnu.org/cookbook/en/html_node/Packaging-Tutorial.html
+
+* A "Hello World" package
+
+#+BEGIN_SRC scheme
+(define-public hello
+    (package
+     (name "hello")
+     (version "2.10")
+     (source (origin
+	      (method url-fetch)
+	      (uri (string-append "mirror://gnu/hello/hello-" version ".tar.gz"))
+	      (sha256
+	       (base32
+		"0ssi1wpaf7plaswqqjwigppsg5fyh99vdlb9kzl7c9lng89ndq1i"))))
+     (build-system gnu-build-system)
+     (synopsis "Hello, GNU world: An example GNU package")
+     (description
+      "GNU Hello prints the message \"Hello, world!\" and then exits.  It
+serves as an example of standard GNU coding practices.  As such, it supports
+command-line arguments, multiple languages, and so on.")
+     (home-page "https://www.gnu.org/software/hello/")
+     (license gpl3+)))
+#+END_SRC
+
+*name* : The project name, keep it lower case without underscore and using kebabcase
+
+*source* : description of the source code origin. Contains:
+  1. The method, here /url-fetch/ to download via http/ftp, but other methods exist such as git-fetch
+  2. The URL, which is typically some https:// location for url-fetch. Here the special "mirror://gnu" is a set of well known locations
+  3. The sha256 checksum of the requested file. This is to ensure the source is not corrupted. Guix works with base32 strings, hence the base32 function
+
+*build-system* : gnu-build-system abstractions away ./configure && make && make install
+               other build systems:
+	         - trivial-build-system : does nothing, lets the packager program all the build steps
+		 - python-build-system
+		 - emacs-build-system
+
+*synopsis* : a concise summary of what the package does
+
+*description* : same as the synopsis
+
+*home-page* : use HTTPS if available
+
+*license* : see guix/licenses.scm in the project source for a full list of available licenses
+
+** Building our first package
+
+#+BEGIN_SRC scheme :tangle my-hello.scm
+(use-modules (guix packages)
+	     (guix download)
+	     (guix build-system gnu)
+	     (guix licenses))
+
+(package
+ (name "my-hello")
+ (version "2.10")
+ (source (origin
+	  (method url-fetch)
+	  (uri (string-append "murror://gnu/hello/hello-" version ".tar.gz"))
+	  (sha256
+             (base32
+              "0ssi1wpaf7plaswqqjwigppsg5fyh99vdlb9kzl7c9lng89ndq1i"))))
+ (build-system gnu-build-system)
+ (synopsis "Hello, Guix World: An example of a custom Guix package")
+ (description
+  "GNU Hello prints the message \"Hello, world!\" and then exits.  It
+serves as an example of standard GNU coding practices.
+This is a custom version of this package")
+ (home-page "https://www.gnu.org/software/hello")
+ (license gpl3+))
+#+END_SRC
+
+If we change the source, we'll need to update the checksum.
+Guix refuses to build anything if the given checksum does not match the computed checksum of the source code.
+
+To obtain the correct checksum of the package declaration, we need to download the source, compute the sha256 checksum and convert it to base32. Thankfully, guix can automate this task for us; all we need is to provide the URI:
+
+#+BEGIN_SRC bash
+guix download mirror://gnu/hello/hello-2.10.tar.gz
+#+END_SRC
+
+Note that GNU package tarballs come with an OpenPGP signature, so we should check the signature of this tarball with "gpg" to authenticate before going further
+
+#+BEGIN_SRC bash
+guix download mirror://gnu/hello/hello-2.10.tar.gz.sig
+gpg --verify /gnu/store/rzs8wba9ka7grrmgcpfyxvs58mly0sx6-hello-2.10.tar.gz.sig /gnu/store/hbdalsf5lpf01x4dcknwx6xbn6n5km6k-hello-2.10.tar.gz
+#+END_SRC
+
+We can then happily run
+
+#+BEGIN_SRC bash
+guix package --install-from-file=my-hello.scm
+#+END_SRC
+
+
+* Give it a shot with emacs-pomodoro
+
+woohoo, I got it working!
+
+#+begin_src scheme
+(use-modules (guix packages)
+	     (guix git-download)
+	     (guix build-system emacs)
+	     (guix licenses))
+
+(package
+ (name "emacs-pomodoro")
+ (version "1.0")
+ (source (origin
+	  (method git-fetch)
+	  (uri (git-reference
+		(url "https://github.com/baudtack/pomodoro.el")
+		(commit "ed888b24d0b89a5dec6f5278b1064c530c827321")))
+	  (file-name (git-file-name "emacs-pomodoro" "1.0"))
+	  (sha256
+           (base32
+	    "0yv1339q5s31wxw8y34pb09b0rlvz9m3gzqb4dc1q8ncq8xb8wl5"))))
+ (build-system emacs-build-system)
+ (synopsis "A timer for the Pomodoro Technique")
+ (description
+  "A timer for the Pomodoro Technique that is accessible from GNU Emacs. Runs a timer in your modeline.")
+ (home-page "https://github.com/baudtack/pomodoro.el")
+ (license gpl3+))
+#+end_src
